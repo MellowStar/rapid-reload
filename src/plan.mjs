@@ -58,6 +58,20 @@ export function composeFileName(text) {
   return m ? m[1] : '';
 }
 
+export const COMPOSE_FILES = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
+
+/** Folders (repo-relative, '.' for the root) holding a Compose file, from a list of repo paths. Shallowest first. */
+export function composeDirs(paths) {
+  const dirs = new Set();
+  for (const p of paths) {
+    const parts = p.split('/');
+    if (COMPOSE_FILES.includes(parts.at(-1)) && !parts.includes('node_modules'))
+      dirs.add(parts.slice(0, -1).join('/') || '.');
+  }
+  const depth = (d) => (d === '.' ? 0 : d.split('/').length);
+  return [...dirs].sort((a, b) => depth(a) - depth(b) || a.localeCompare(b));
+}
+
 /** True when a Dockerfile copies its whole build context, so any file change rebuilds the image. */
 export function copiesWholeContext(dockerfile) {
   return /^\s*(COPY|ADD)\s+(--\S+\s+)*\.\/?\s+\S+\s*$/im.test(dockerfile);
