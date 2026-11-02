@@ -26,8 +26,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test test/unit/",
-    "test:e2e": "RAPID_RELOAD_E2E=1 node --test --test-timeout=1800000 test/e2e/",
+    "test": "node --test 'test/unit/*.test.mjs'",
+    "test:e2e": "RAPID_RELOAD_E2E=1 node --test --test-timeout=1800000 'test/e2e/*.test.mjs'",
     "check:clean": "node scripts/check-clean.mjs"
   },
   "keywords": [
