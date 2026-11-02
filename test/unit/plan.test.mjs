@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bindRestarts, branchesAt, composeFileName, copiesWholeContext, defaultProjectName, mergeSource, plan } from '../../src/plan.mjs';
+import { bindRestarts, branchesAt, composeDirs, composeFileName, copiesWholeContext, defaultProjectName, mergeSource, plan } from '../../src/plan.mjs';
 
 const rules = { ignore: ['docs/**', '**/*.md'], reset: ['db/**', 'migrations/**'] };
 const action = (changed, extra = {}) => plan({ changed, deployed: 'abc', ...rules, ...extra }).action;
@@ -75,4 +75,11 @@ test('whole-context copies are spotted', () => {
   assert.equal(copiesWholeContext('FROM node\nCOPY --chown=node:node . /app\n'), true);
   assert.equal(copiesWholeContext('FROM node\nADD ./ /app\n'), true);
   assert.equal(copiesWholeContext('FROM node\nCOPY package.json ./\nCOPY src/ ./src/\n'), false);
+});
+
+test('Compose folders are found anywhere in the repo, shallowest first', () => {
+  const paths = ['README.md', 'platform/compose.yaml', 'platform/compose.e2e.yaml', 'deploy/prod/docker-compose.yml', 'web/node_modules/x/compose.yaml'];
+  assert.deepEqual(composeDirs(paths), ['platform', 'deploy/prod']);
+  assert.deepEqual(composeDirs(['compose.yml', 'a/compose.yaml']), ['.', 'a']);
+  assert.deepEqual(composeDirs(['src/index.js']), []);
 });

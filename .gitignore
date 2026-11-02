@@ -1,0 +1,4 @@
+node_modules/
+*.tgz
+.forbidden-strings
+.DS_Store

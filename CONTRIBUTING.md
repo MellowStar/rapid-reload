@@ -24,5 +24,7 @@ dependencies, `src/plan.mjs` stays pure and tested, and the token never reaches 
 
 1. Update `CHANGELOG.md` and the version in `package.json`, and merge.
 2. Tag the merge commit `vX.Y.Z` and push the tag.
-3. The `release` workflow runs the tests and publishes to npm with provenance. It needs npm trusted publishing
-   configured for this repo and the `release.yml` workflow.
+3. The `release` workflow runs the tests and stages the release on npm with provenance. It needs npm trusted
+   publishing set up for this repo and `release.yml`, with direct publishing left off.
+4. Approve the staged release with your 2FA: `npm stage list rapid-reload`, check it with `npm stage view <stage-id>`,
+   then `npm stage approve <stage-id>`. Use `npm stage reject <stage-id>` if anything looks wrong.

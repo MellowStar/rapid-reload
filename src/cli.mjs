@@ -5,7 +5,7 @@ import { createServer } from 'node:net';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONFIG_FILE, ConfigError, DEFAULT_STATUS_PORT, MARKER, loadConfig, parseEnvFile } from './config.mjs';
-import { composeFileName, copiesWholeContext, defaultProjectName } from './plan.mjs';
+import { COMPOSE_FILES, composeDirs, composeFileName, copiesWholeContext, defaultProjectName } from './plan.mjs';
 
 const PKG = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const POLLER_COMPOSE = join(PKG, 'container', 'compose.yaml');
@@ -131,10 +131,20 @@ function init(flags) {
   const root = repoRoot(process.cwd());
   const target = join(root, CONFIG_FILE);
   if (existsSync(target) && !flags.force) throw new Error(`${target} already exists (use --force to overwrite)`);
-  const dir = flags.dir ?? '.';
-  const candidates = ['compose.yaml', 'compose.yml', 'docker-compose.yaml', 'docker-compose.yml'];
-  const file = candidates.find((f) => existsSync(join(root, dir, f)));
-  if (!file) throw new Error(`No Compose file in ${join(root, dir)}. Use --dir to point at the folder that has one.`);
+  let dir = flags.dir ?? '.';
+  if (!flags.dir && !COMPOSE_FILES.some((f) => existsSync(join(root, f)))) {
+    // Not in the root: look through the repo's files, so a Compose file in a subfolder is found without --dir.
+    const files = sh('git', ['-C', root, 'ls-files', '--cached', '--others', '--exclude-standard']).out.split('\n');
+    const found = composeDirs(files).filter((d) => !d.startsWith('examples/'));
+    if (found.length === 1) {
+      dir = found[0];
+      console.log(`Using the Compose file in ${dir}/`);
+    } else if (found.length > 1)
+      throw new Error(`Compose files in several folders. Pick one with --dir:\n${found.map((d) => `  --dir ${d}`).join('\n')}`);
+  }
+  const file = COMPOSE_FILES.find((f) => existsSync(join(root, dir, f)));
+  if (!file)
+    throw new Error(`No Compose file (${COMPOSE_FILES.join(', ')}) in ${join(root, dir)}. Use --dir to point at the folder that has one.`);
   const services = sh('docker', ['compose', '-f', join(root, dir, file), 'config', '--services'], { cwd: join(root, dir) });
   if (!services.ok) throw new Error(`docker compose config failed: ${services.err}`);
   let remote = sh('git', ['-C', root, 'remote', 'get-url', 'origin']).out;

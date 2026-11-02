@@ -1,7 +1,15 @@
 {
   "name": "rapid-reload",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Keep a local Docker Compose stack on the latest commit of a Git branch: each push rebuilds only what changed, and data is wiped only when you say so. Status page, test-data hooks, no runtime dependencies.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MellowStar/rapid-reload.git"
+  },
+  "homepage": "https://github.com/MellowStar/rapid-reload#readme",
+  "bugs": {
+    "url": "https://github.com/MellowStar/rapid-reload/issues"
+  },
   "type": "module",
   "bin": {
     "rapid-reload": "bin/rapid-reload.mjs"
@@ -18,8 +26,8 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test test/unit/",
-    "test:e2e": "RAPID_RELOAD_E2E=1 node --test --test-timeout=1800000 test/e2e/",
+    "test": "node --test 'test/unit/*.test.mjs'",
+    "test:e2e": "RAPID_RELOAD_E2E=1 node --test --test-timeout=1800000 'test/e2e/*.test.mjs'",
     "check:clean": "node scripts/check-clean.mjs"
   },
   "keywords": [
