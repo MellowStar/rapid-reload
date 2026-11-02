@@ -65,6 +65,20 @@ function containers() {
 const marks = () =>
   must('docker', ['compose', '-p', project, 'exec', '-T', 'db', 'psql', '-U', 'postgres', '-Atc', 'SELECT name FROM marks ORDER BY 1']).split('\n').filter(Boolean);
 
+/** The page body once the server answers. Right after a restart, Docker's port forwarder may accept and drop the
+ *  connection until the app listens, so retry for a while. */
+async function pageText(url, seconds = 30) {
+  const end = Date.now() + seconds * 1000;
+  for (;;) {
+    try {
+      return (await (await fetch(url)).text()).trim();
+    } catch (e) {
+      if (Date.now() > end) throw e;
+      await sleep(500);
+    }
+  }
+}
+
 async function waitForDeployed(sha, minutes = 15) {
   const end = Date.now() + minutes * 60_000;
   while (Date.now() < end) {
@@ -186,7 +200,7 @@ test('rapid-reload end to end', { skip }, async (t) => {
     assert.notEqual(now.web.started, before.web.started);
     assert.deepEqual(now.worker, before.worker);
     assert.deepEqual(now.db, before.db);
-    assert.equal((await (await fetch(`http://127.0.0.1:${webPort}`)).text()).trim(), 'Changed message');
+    assert.equal(await pageText(`http://127.0.0.1:${webPort}`), 'Changed message');
   });
 
   await t.test('a broken build leaves the old stack running and is not retried every check', () => {
