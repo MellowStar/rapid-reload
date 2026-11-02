@@ -1,0 +1,24 @@
+# Publishes to npm when a vX.Y.Z tag is pushed. Uses npm trusted publishing (OIDC), so no npm token is stored here;
+# configure this repo and workflow as a trusted publisher on npmjs.com first.
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - name: Tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm test
+      - run: npm run check:clean
+      - run: npm publish --provenance --access public
