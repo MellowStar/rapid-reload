@@ -1,5 +1,6 @@
-# Publishes to npm when a vX.Y.Z tag is pushed. Uses npm trusted publishing (OIDC), so no npm token is stored here;
-# configure this repo and workflow as a trusted publisher on npmjs.com first.
+# Stages a release on npm when a vX.Y.Z tag is pushed. Uses npm trusted publishing (OIDC), so no npm token is stored
+# here. The trusted publisher may only stage, so nothing goes live until a maintainer approves it with 2FA:
+#   npm stage list rapid-reload   then   npm stage approve <stage-id>
 name: Release
 on:
   push:
@@ -21,4 +22,4 @@ jobs:
         run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - run: npm test
       - run: npm run check:clean
-      - run: npm publish --provenance --access public
+      - run: npm stage publish --provenance --access public
