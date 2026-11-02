@@ -1,0 +1,25 @@
+{
+  "name": "basic-example",
+  "git": {
+    "remote": "https://github.com/OWNER/REPO.git",
+    "branch": "pre-merge",
+    "tokenFile": "~/.cache/rapid-reload/basic-example/git-token"
+  },
+  "compose": {
+    "project": "basic-example-reload",
+    "services": ["web", "worker", "db"],
+    "env": { "WEB_PORT": "13000" }
+  },
+  "paths": {
+    "ignore": ["docs/**", "**/*.md"],
+    "reset": ["db/**"]
+  },
+  "hooks": {
+    "reset": [{ "label": "Starting the database", "run": "bash scripts/reset.sh" }],
+    "afterReset": [{ "label": "Adding test data", "run": "bash scripts/seed.sh" }]
+  },
+  "statusPage": {
+    "port": 13001,
+    "links": [{ "label": "Web app", "url": "http://127.0.0.1:13000" }]
+  }
+}

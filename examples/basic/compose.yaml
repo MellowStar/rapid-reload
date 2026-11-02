@@ -1,0 +1,26 @@
+# A small stack: a web app with a bind-mounted config file, a worker and a Postgres database.
+# The poller runs it as its own Compose project, so it never touches the stack you run by hand.
+services:
+  web:
+    build: ./web
+    ports:
+      - '127.0.0.1:${WEB_PORT:-3000}:3000'
+    volumes:
+      - ./web-config/message.txt:/config/message.txt:ro
+  worker:
+    build: ./worker
+    depends_on:
+      db: { condition: service_healthy }
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: example-only
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 2s
+      retries: 30
+volumes:
+  db-data: {}

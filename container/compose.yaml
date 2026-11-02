@@ -1,0 +1,20 @@
+# The poller runs as its own Compose project (rapid-reload-<name>, set by the CLI), so updating or resetting the
+# stack it manages never removes the poller. The CLI sets every variable below.
+services:
+  poller:
+    build:
+      context: ..
+      dockerfile: container/Dockerfile
+    init: true
+    restart: unless-stopped
+    environment:
+      RAPID_RELOAD_CONFIG: ${RAPID_RELOAD_STATE_DIR:?}/config.json
+      RAPID_RELOAD_TOKEN_FILE: /run/rapid-reload/token
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same path inside and out: Compose runs on the host's Docker, which must find the paths it is given.
+      - ${RAPID_RELOAD_STATE_DIR:?}:${RAPID_RELOAD_STATE_DIR:?}
+      - ${RAPID_RELOAD_TOKEN_FILE:?}:/run/rapid-reload/token:ro
+    ports:
+      # Loopback only: build output is shown without authentication.
+      - '127.0.0.1:${RAPID_RELOAD_STATUS_PORT:?}:8080'

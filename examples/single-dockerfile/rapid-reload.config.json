@@ -1,0 +1,17 @@
+{
+  "name": "my-app",
+  "git": {
+    "remote": "https://github.com/OWNER/REPO.git",
+    "branch": "pre-merge",
+    "tokenFile": "~/.cache/rapid-reload/my-app/git-token"
+  },
+  "compose": {
+    "project": "my-app-reload",
+    "env": { "APP_PORT": "18080" }
+  },
+  "paths": { "ignore": ["docs/**", "**/*.md"] },
+  "statusPage": {
+    "port": 18081,
+    "links": [{ "label": "App", "url": "http://127.0.0.1:18080" }]
+  }
+}

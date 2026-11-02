@@ -1,0 +1,6 @@
+# A project with only a Dockerfile needs just this much Compose to use the poller.
+services:
+  app:
+    build: .
+    ports:
+      - '127.0.0.1:${APP_PORT:-8080}:8080'
