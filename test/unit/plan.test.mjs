@@ -83,3 +83,10 @@ test('Compose folders are found anywhere in the repo, shallowest first', () => {
   assert.deepEqual(composeDirs(['compose.yml', 'a/compose.yaml']), ['.', 'a']);
   assert.deepEqual(composeDirs(['src/index.js']), []);
 });
+
+test('a config change with no code change is an update; code rules still apply', () => {
+  assert.equal(action([], { configChanged: true }), 'update');
+  assert.equal(action(['README.md'], { configChanged: true }), 'update');
+  assert.equal(action(['db/init.sql'], { configChanged: true }), 'reset');
+  assert.equal(action([], { configChanged: false }), 'none');
+});

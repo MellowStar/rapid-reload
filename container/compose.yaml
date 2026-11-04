@@ -10,11 +10,15 @@ services:
     environment:
       RAPID_RELOAD_CONFIG: ${RAPID_RELOAD_STATE_DIR:?}/config.json
       RAPID_RELOAD_TOKEN_FILE: /run/rapid-reload/token
+      RAPID_RELOAD_SOURCE_CONFIG: /run/rapid-reload/source/${RAPID_RELOAD_CONFIG_NAME:?}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # Same path inside and out: Compose runs on the host's Docker, which must find the paths it is given.
       - ${RAPID_RELOAD_STATE_DIR:?}:${RAPID_RELOAD_STATE_DIR:?}
       - ${RAPID_RELOAD_TOKEN_FILE:?}:/run/rapid-reload/token:ro
+      # The folder holding the config file, read-only: the poller re-reads the config on every check. A folder, not the
+      # file, because editors replace the file and a file mount would keep the old one.
+      - ${RAPID_RELOAD_SOURCE_DIR:?}:/run/rapid-reload/source:ro
     ports:
       # Loopback only: build output is shown without authentication.
       - '127.0.0.1:${RAPID_RELOAD_STATUS_PORT:?}:8080'

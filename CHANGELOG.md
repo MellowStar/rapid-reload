@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+
+- The poller re-reads the config file on every check: change `git.branch`, `compose`, `paths` or `hooks` and the next
+  check deploys it, with no `start` and no push to the followed branch. Settings that need `start` are logged.
+
 ## 0.1.1
 
 - `init` finds a Compose file in a subfolder, such as `platform/compose.yaml`, without `--dir`. When several folders
