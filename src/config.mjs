@@ -221,10 +221,46 @@ export function loadConfig(file) {
   }
   const errors = validate(raw);
   if (errors.length) throw new ConfigError(`${file}:\n  - ${errors.join('\n  - ')}`);
-  const config = normalize(raw, dirname(resolve(file)));
+  const config = { ...normalize(raw, dirname(resolve(file))), configFile: resolve(file) };
   const unsafe = stateDirErrors(config.stateDir);
   if (unsafe.length) throw new ConfigError(unsafe.join('\n'));
   return config;
+}
+
+/** Settings the poller re-reads from the live config file on every check. The rest need `start` again. */
+export const LIVE_SETTINGS = ['git.branch', 'git.keepOnClean', 'compose', 'paths', 'hooks'];
+
+/**
+ * The config the poller uses for one check: `stored` (written by `start`) with the live settings taken from `liveRaw`,
+ * the parsed config file as it is now. Returns { config, errors, needsRestart } where needsRestart lists the settings
+ * that changed but only apply after `start`.
+ */
+export function liveConfig(stored, liveRaw) {
+  const errors = validate(liveRaw);
+  if (errors.length) return { config: stored, errors, needsRestart: [] };
+  const live = normalize(liveRaw, dirname(stored.configFile ?? '/'));
+  const config = {
+    ...stored,
+    git: { ...stored.git, branch: live.git.branch, keepOnClean: live.git.keepOnClean },
+    // envFile is read on the host by `start`; its values stay, and the live compose.env goes on top.
+    compose: { ...live.compose, envFile: stored.compose.envFile, env: { ...(stored.envFileEnv ?? {}), ...live.compose.env } },
+    paths: live.paths,
+    hooks: live.hooks,
+  };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const needsRestart = [];
+  if (live.name !== stored.name) needsRestart.push('name');
+  if (live.pollIntervalSeconds !== stored.pollIntervalSeconds) needsRestart.push('pollIntervalSeconds');
+  for (const k of ['remote', 'tokenEnv', 'tokenUsername']) if (live.git[k] !== stored.git[k]) needsRestart.push(`git.${k}`);
+  if (Boolean(live.git.tokenFile) !== Boolean(stored.git.tokenFile)) needsRestart.push('git.tokenFile');
+  if (live.compose.envFile !== stored.compose.envFile) needsRestart.push('compose.envFile');
+  if (!same(live.statusPage, stored.statusPage)) needsRestart.push('statusPage');
+  return { config, errors: [], needsRestart };
+}
+
+/** A stable fingerprint of the live settings, so the poller can tell when they changed. */
+export function liveFingerprint(cfg) {
+  return JSON.stringify([cfg.git.branch, cfg.git.keepOnClean, cfg.compose, cfg.paths, cfg.hooks]);
 }
 
 /** KEY=VALUE lines; blank lines and # comments are skipped, surrounding quotes removed. */

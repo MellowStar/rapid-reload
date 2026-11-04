@@ -66,3 +66,31 @@ test('loadConfig reports every problem at once', () => {
 test('env files', () => {
   assert.deepEqual(parseEnvFile('# c\nA=1\nexport B="two"\n\nC = \'3\'\nnot a line\n'), { A: '1', B: 'two', C: '3' });
 });
+
+test('liveConfig takes branch, compose, paths and hooks from the live file and keeps the rest', async () => {
+  const { liveConfig, liveFingerprint, normalize } = await import('../../src/config.mjs');
+  const raw = base();
+  const stored = { ...normalize(raw, '/repo'), configFile: '/repo/rapid-reload.config.json', envFileEnv: { A: '1' } };
+  const live = structuredClone(raw);
+  live.git.branch = 'agent/feature-x';
+  live.compose.env = { B: '2' };
+  live.paths = { reset: ['db/**'] };
+  const { config, errors, needsRestart } = liveConfig(stored, live);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(needsRestart, []);
+  assert.equal(config.git.branch, 'agent/feature-x');
+  assert.equal(config.git.remote, stored.git.remote);
+  assert.deepEqual(config.compose.env, { A: '1', B: '2' });
+  assert.deepEqual(config.paths.reset, ['db/**']);
+  assert.notEqual(liveFingerprint(config), liveFingerprint(stored));
+
+  live.statusPage = { port: 19999 };
+  live.git.remote = 'https://example.com/other.git';
+  const r = liveConfig(stored, live);
+  assert.deepEqual(r.needsRestart, ['git.remote', 'statusPage']);
+  assert.equal(r.config.git.remote, stored.git.remote);
+  assert.equal(r.config.statusPage.port, stored.statusPage.port);
+
+  live.git.branch = '--bad';
+  assert.ok(liveConfig(stored, live).errors.length);
+});

@@ -58,6 +58,8 @@ const pollerEnv = (cfg) => ({
   RAPID_RELOAD_STATE_DIR: cfg.stateDir,
   RAPID_RELOAD_STATUS_PORT: String(cfg.statusPage.port),
   RAPID_RELOAD_TOKEN_FILE: tokenMount(cfg),
+  RAPID_RELOAD_SOURCE_DIR: dirname(cfg.configFile),
+  RAPID_RELOAD_CONFIG_NAME: basename(cfg.configFile),
 });
 const dcPoller = (cfg, args, opts = {}) =>
   sh('docker', ['compose', '-p', pollerProject(cfg), '-f', POLLER_COMPOSE, ...args], { env: pollerEnv(cfg), ...opts });
@@ -275,7 +277,7 @@ async function start(flags) {
     throw new Error(`${cfg.stateDir} already has files and wasn't created by rapid-reload. Use an empty folder, or --adopt if it is an older poller's state folder.`);
   mkdirSync(cfg.stateDir, { recursive: true, mode: 0o700 });
   writeFileSync(join(cfg.stateDir, MARKER), `${cfg.name}\n`);
-  const stored = { ...cfg, compose: { ...cfg.compose, env: { ...envFile(cfg), ...cfg.compose.env } } };
+  const stored = { ...cfg, envFileEnv: envFile(cfg), compose: { ...cfg.compose, env: { ...envFile(cfg), ...cfg.compose.env } } };
   writeFileSync(join(cfg.stateDir, 'config.json'), JSON.stringify(stored, null, 2) + '\n', { mode: 0o600 });
   chmodSync(join(cfg.stateDir, 'config.json'), 0o600);
   if (!cfg.git.tokenFile) {

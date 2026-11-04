@@ -164,8 +164,14 @@ That container has bash, git, Node.js 24 and the Docker CLI. Each hook gets thes
 
 A failing hook fails the update, and the status page names it.
 
-**The config is read when you run `start`,** not from the branch, so a pushed commit can't change it. Rerun `start`
-after editing it. Hook scripts, though, come from the branch.
+**The poller re-reads your local config file on every check,** never the copy in the branch, so a pushed commit can't
+change it. Editing `git.branch`, `git.keepOnClean`, `compose`, `paths` or `hooks` takes effect on the next check with
+no restart: a new branch is fetched and deployed, and a config change with no code change still updates the stack
+(a `paths.reset` match in the code diff still resets). This lets an agent point the stack at its own branch by editing
+the config instead of pushing to a shared one. The poller mounts the config's folder read-only for this. Other
+settings (`name`, `git.remote` and token settings, `compose.envFile`, `pollIntervalSeconds`, `statusPage`) apply only
+after `start`; the events log says when one of them changed. An invalid edit fails the check until it is fixed, and the
+running stack is left alone. Hook scripts come from the branch.
 
 ## Commands
 

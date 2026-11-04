@@ -11,14 +11,17 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { bindRestarts, branchesAt, mergeSource, plan } from './plan.mjs';
 import { serveStatus } from './status-server.mjs';
-import { MARKER } from './config.mjs';
+import { MARKER, liveConfig, liveFingerprint } from './config.mjs';
 
 const TOKEN_FILE = process.env.RAPID_RELOAD_TOKEN_FILE ?? '/run/rapid-reload/token';
-const cfg = JSON.parse(readFileSync(process.env.RAPID_RELOAD_CONFIG, 'utf8'));
+const SOURCE_CONFIG = process.env.RAPID_RELOAD_SOURCE_CONFIG ?? '';
+const stored = JSON.parse(readFileSync(process.env.RAPID_RELOAD_CONFIG, 'utf8'));
+// Replaced at the start of each check by the live config file (see reloadConfig).
+let cfg = stored;
 const DIR = cfg.stateDir;
 const REPO = join(DIR, 'repo');
-const COMPOSE_DIR = join(REPO, cfg.compose.dir);
-const SERVICES = cfg.compose.services;
+let COMPOSE_DIR = join(REPO, cfg.compose.dir);
+let SERVICES = cfg.compose.services;
 const now = () => Math.floor(Date.now() / 1000);
 const file = (name) => join(DIR, name);
 
@@ -188,8 +191,34 @@ function describe(sha) {
   return `${cfg.git.branch} ${sha.slice(0, 7)} (from ${name})`;
 }
 
+// Agents and people switch the branch, or change compose, paths and hooks, by editing the config file in the project
+// folder; no restart and no push to the followed branch needed. Settings that only apply on start are reported.
+function reloadConfig() {
+  if (!SOURCE_CONFIG || !existsSync(SOURCE_CONFIG)) return;
+  current = 'Reading the config file';
+  let raw;
+  try {
+    raw = JSON.parse(readFileSync(SOURCE_CONFIG, 'utf8'));
+  } catch (e) {
+    throw new Error(`The config file is not valid JSON: ${e.message}`);
+  }
+  const { config, errors, needsRestart } = liveConfig(stored, raw);
+  if (errors.length) throw new Error(`The config file has problems:\n  - ${errors.join('\n  - ')}`);
+  const warned = needsRestart.join(', ');
+  if (warned && read('needs-restart') !== warned) note(`Config changes that need \`rapid-reload start\`: ${warned}`);
+  write('needs-restart', warned);
+  cfg = config;
+  COMPOSE_DIR = join(REPO, cfg.compose.dir);
+  SERVICES = cfg.compose.services;
+}
+
 async function check() {
   write('last-check', String(now()));
+  reloadConfig();
+  const fingerprint = liveFingerprint(cfg);
+  // Missing for a state folder from an older version: treat as unchanged, so upgrading doesn't redeploy.
+  const attemptedConfig = existsSync(file('attempted-config')) ? read('attempted-config') : fingerprint;
+  const configChanged = attemptedConfig !== fingerprint;
   if (usesToken() && !token()) {
     publish('blocked', `Waiting for a Git token in ${cfg.git.tokenFile ?? '$' + cfg.git.tokenEnv}. Rerun start after adding it.`);
     return;
@@ -201,7 +230,7 @@ async function check() {
   const deployed = read('deployed');
   const label = describe(sha);
   // Recorded before the attempt, so a commit that fails is not rebuilt every minute.
-  if (sha === read('attempted')) {
+  if (sha === read('attempted') && !configChanged) {
     if (sha === deployed) {
       current = 'Restarting stopped containers';
       await ensureUp();
@@ -212,9 +241,10 @@ async function check() {
     return;
   }
   write('attempted', sha);
+  write('attempted-config', fingerprint);
   writeFileSync(file('build.log'), '');
   rmSync(file('failed'), { force: true });
-  note(`Updating to ${label}`);
+  note(`Updating to ${label}${configChanged ? ' (config file changed)' : ''}`);
   current = 'Checking out the code';
   git(['checkout', '-qf', '--detach', sha]);
   git(['clean', '-qffdx', ...cfg.git.keepOnClean.flatMap((p) => ['-e', p])]);
@@ -224,7 +254,7 @@ async function check() {
     const r = spawnSync('git', ['diff', '--name-only', deployed, sha], { cwd: REPO, encoding: 'utf8' });
     if (r.status === 0) changed = r.stdout.split('\n').filter(Boolean);
   }
-  const decision = plan({ changed, deployed, ...cfg.paths });
+  const decision = plan({ changed, deployed, ...cfg.paths, configChanged });
   write('plan', JSON.stringify(decision));
   note(`Plan: ${decision.action} (${decision.reason})`);
   if (decision.action === 'reset') await reset(sha);
