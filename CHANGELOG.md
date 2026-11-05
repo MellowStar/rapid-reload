@@ -4,6 +4,7 @@
 
 - The poller re-reads the config file on every check: change `git.branch`, `compose`, `paths` or `hooks` and the next
   check deploys it, with no `start` and no push to the followed branch. Settings that need `start` are logged.
+- Docs: any branch can be followed; a dedicated `pre-merge` branch is no longer assumed.
 
 ## 0.1.1
 

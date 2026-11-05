@@ -10,9 +10,10 @@ rapid-reload is a local development tool. Know what it can do before you run it.
 - **It runs whatever the branch contains.** Each update builds the branch's Dockerfiles, starts its Compose services
   and runs its hook scripts. Anyone who can push to the followed branch can run code on your machine. Follow only
   branches that people you trust push to, and never a branch that takes unreviewed code from forks.
-- **Its own settings come from your machine, not the branch.** The config is read when you run `start`, so a pushed
-  commit can't change the remote, the branch, the hooks list or the project name. The hook scripts themselves come
-  from the branch.
+- **Its own settings come from your machine, not the branch.** The poller re-reads your local config file on every
+  check (never the copy in the branch), so a pushed commit can't change the remote, the branch, the hooks list or the
+  project name. Anyone who can edit that local file can, and the next check acts on it. The hook scripts themselves
+  come from the branch.
 - **The status page has no login.** It listens on 127.0.0.1 only and can't be exposed to the network from the config.
   Anything on your machine can read it, including build output. Don't print secrets in your builds or hooks.
 

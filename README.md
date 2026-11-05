@@ -4,8 +4,10 @@ Keeps a local Docker Compose stack running the latest commit of a Git branch. Pu
 the stack on your machine is rebuilt and restarted. Only the services whose images changed are recreated, and your
 databases are wiped only when you say a change needs it.
 
-It is made for a branch such as `pre-merge` that collects work before it reaches `main`. Anyone can then click through
-the result on a real stack without checking anything out.
+Follow any branch you like: `main`, a feature branch, or an agent's working branch. No special `pre-merge` or
+integration branch is needed. The poller checks two things on every poll: new commits on the branch, and edits to your
+local config. Change `git.branch` in the config and the next check switches the stack to that branch, with no restart.
+Anyone can then click through the result on a real stack without checking anything out.
 
 > [!WARNING]
 > The poller container mounts the Docker socket, which gives it full control of your machine's Docker, and so of the
@@ -14,7 +16,7 @@ the result on a real stack without checking anything out.
 
 ## How it works
 
-Every minute (`pollIntervalSeconds`) the poller fetches the branch. When the branch has moved, it compares the new
+Every minute (`pollIntervalSeconds`) the poller re-reads the config and fetches the branch. When the branch has moved, it compares the new
 commit with the last one that deployed successfully, and picks one of three updates:
 
 | Changed paths | Update |
@@ -94,7 +96,7 @@ Instead of a file, you can set `git.tokenEnv` to the name of an environment vari
   "name": "shop",
   "git": {
     "remote": "https://github.com/acme/shop.git",
-    "branch": "pre-merge",
+    "branch": "main",
     "tokenFile": "~/.cache/rapid-reload/shop/git-token"
   },
   "compose": {
@@ -125,7 +127,7 @@ Instead of a file, you can set `git.tokenEnv` to the name of an environment vari
 | `stateDir` | `~/.cache/rapid-reload/<name>` | Where the poller keeps its clone, logs and state. Must be a dedicated folder. |
 | `pollIntervalSeconds` | `60` | How often to check the branch. Minimum 10. |
 | `git.remote` | required | `https://` URL of the repo. Never include credentials. |
-| `git.branch` | required | The branch to follow. |
+| `git.branch` | required | The branch to follow. Any branch works; edit it while the poller runs to switch branches on the next check. |
 | `git.tokenFile` | none | File holding a read-only token. `~` is expanded. Relative paths start at the config's folder. |
 | `git.tokenEnv` | none | Or: environment variable holding the token when you run `start`. |
 | `git.tokenUsername` | `x-access-token` | User name sent with the token. GitHub ignores it; GitLab wants `oauth2`. |
@@ -153,7 +155,7 @@ folder, `**` across folders. Paths starting with a dot need the dot in the patte
 
 **Hooks** are shell commands run with `bash -c` from the repo root of the poller's clone, inside the poller container.
 That container has bash, git, Node.js 24 and the Docker CLI. Each hook gets these variables, so a plain
-`docker compose ...` targets the pre-merge stack:
+`docker compose ...` targets the poller's stack:
 
 | Variable | Value |
 | --- | --- |
@@ -228,7 +230,7 @@ status port that is already in use.
 ## Troubleshooting
 
 - **`blocked`:** the token file is missing or empty. Add it, then rerun `start`.
-- **Port already allocated:** the pre-merge stack publishes the same ports as your dev stack. Set different ports
+- **Port already allocated:** the poller's stack publishes the same ports as your dev stack. Set different ports
   through `compose.env`, if your Compose file reads them from variables.
 - **The stack has data from an earlier branch:** non-reset updates keep volumes. Add the paths that need fresh data to
   `paths.reset`, or run `uninstall --yes` and `start` to start over.
