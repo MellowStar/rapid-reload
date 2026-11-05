@@ -9,8 +9,9 @@ Instructions for coding agents. There are two cases: setting the poller up in a 
 2. From the repo root, run `npx rapid-reload@<version> init`. If the Compose file isn't in the root, add
    `--dir <folder>`.
 3. Edit `rapid-reload.config.json`:
-   - `git.branch`: the branch to follow, usually a pre-merge or integration branch, never one that untrusted people
-     can push to.
+   - `git.branch`: the branch to follow. Any branch works (no pre-merge or integration branch is needed), but never
+     one that untrusted people can push to. The poller re-reads the config on every check, so changing this later
+     switches the stack to the new branch without rerunning `start`.
    - `compose.project`: must differ from the dev stack's project name. `start` refuses a clash.
    - `compose.services`: the long-running services only. Leave out one-shot jobs; run those from hooks.
    - `compose.env`: published ports that differ from the dev stack's, if the Compose file reads them from variables.
