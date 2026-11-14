@@ -1,6 +1,6 @@
 {
   "name": "rapid-reload",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Keep a local Docker Compose stack on the latest commit of a Git branch: each push rebuilds only what changed, and data is wiped only when you say so. Status page, test-data hooks, no runtime dependencies.",
   "repository": {
     "type": "git",

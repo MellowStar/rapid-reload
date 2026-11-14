@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Status page: a form to change `git.branch` (written to the config file) and a "Rebuild now" button, with failures
   shown on the page. New look. The config file's folder is now mounted read-write; rerun `start` after upgrading.
