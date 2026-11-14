@@ -90,3 +90,9 @@ test('a config change with no code change is an update; code rules still apply',
   assert.equal(action(['db/init.sql'], { configChanged: true }), 'reset');
   assert.equal(action([], { configChanged: false }), 'none');
 });
+
+test('a requested rebuild updates even when nothing changed, but never resets', () => {
+  assert.deepEqual(plan({ changed: [], deployed: 'abc', rebuild: true }), { action: 'update', reason: 'rebuild requested' });
+  assert.deepEqual(plan({ changed: ['README.md'], deployed: 'abc', ignore: ['*.md'], rebuild: true }), { action: 'update', reason: 'rebuild requested' });
+  assert.equal(plan({ changed: ['db/1.sql'], deployed: 'abc', reset: ['db/**'], rebuild: true }).action, 'reset');
+});

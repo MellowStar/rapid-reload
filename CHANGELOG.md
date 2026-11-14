@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Status page: a form to change `git.branch` (written to the config file) and a "Rebuild now" button, with failures
+  shown on the page. New look. The config file's folder is now mounted read-write; rerun `start` after upgrading.
+
 ## 0.2.0
 
 - The poller re-reads the config file on every check: change `git.branch`, `compose`, `paths` or `hooks` and the next

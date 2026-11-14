@@ -94,3 +94,15 @@ test('liveConfig takes branch, compose, paths and hooks from the live file and k
   live.git.branch = '--bad';
   assert.ok(liveConfig(stored, live).errors.length);
 });
+
+test('withBranch changes only git.branch and refuses bad names', async () => {
+  const { withBranch } = await import('../../src/config.mjs');
+  const raw = { name: 'demo', git: { remote: 'https://example.com/r.git', branch: 'main' }, compose: { project: 'demo-reload' } };
+  const ok = withBranch(raw, ' feature/x ');
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.raw.git.branch, 'feature/x');
+  assert.equal(raw.git.branch, 'main');
+  assert.ok(withBranch(raw, '-rf').errors.length);
+  assert.ok(withBranch(raw, 'a..b').errors.length);
+  assert.ok(withBranch(raw, '').errors.length);
+});

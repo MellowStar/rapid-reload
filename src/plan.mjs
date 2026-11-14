@@ -8,9 +8,10 @@ const matches = (path, globs) => globs.some((g) => matchesGlob(path, g));
  *   changed:  paths changed since the last good update, or null when that can't be worked out
  *   deployed: the last good commit, or '' when nothing has deployed yet
  *   configChanged: the live config settings differ from the last attempted update's
+ *   rebuild: someone asked for a rebuild (status page), so an update runs even when nothing changed
  * Returns { action: 'none' | 'update' | 'reset', reason }.
  */
-export function plan({ changed, deployed, ignore = [], reset = [], configChanged = false }) {
+export function plan({ changed, deployed, ignore = [], reset = [], configChanged = false, rebuild = false }) {
   if (!deployed) return { action: 'reset', reason: 'first update' };
   if (changed === null)
     return reset.length
@@ -19,6 +20,7 @@ export function plan({ changed, deployed, ignore = [], reset = [], configChanged
   // Ignore wins over reset, so a README next to the migrations never wipes data.
   const relevant = changed.filter((p) => p && !matches(p, ignore));
   if (!relevant.length && configChanged) return { action: 'update', reason: 'the config file changed' };
+  if (!relevant.length && rebuild) return { action: 'update', reason: 'rebuild requested' };
   if (!relevant.length)
     return { action: 'none', reason: changed.length ? 'only ignored paths changed' : 'nothing changed' };
   const hit = relevant.find((p) => matches(p, reset));
