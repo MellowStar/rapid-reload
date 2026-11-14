@@ -27,4 +27,6 @@ dependencies, `src/plan.mjs` stays pure and tested, and the token never reaches 
 3. The `release` workflow runs the tests and stages the release on npm with provenance. It needs npm trusted
    publishing set up for this repo and `release.yml`, with direct publishing left off.
 4. Approve the staged release with your 2FA: `npm stage list rapid-reload`, check it with `npm stage view <stage-id>`,
-   then `npm stage approve <stage-id>`. Use `npm stage reject <stage-id>` if anything looks wrong.
+   then `npm stage approve <stage-id>`. Use `npm stage reject <stage-id>` if anything looks wrong. These commands
+   need you signed in to npm (`npm login`); an `E401` means the login has expired. If nothing is staged, check the
+   workflow with `gh run list --workflow release.yml`.
