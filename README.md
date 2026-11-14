@@ -196,6 +196,18 @@ All commands take `--config <file>`.
 The status page shows the current step, the running commit and the branch that brought it in, the last plan, the
 containers, recent activity and the latest build output. It refreshes itself.
 
+It also has two controls:
+
+- **Branch:** a form showing `git.branch` from the config file. Saving writes the new branch straight back to the
+  config file (only that field changes) and starts a check, which switches the stack to it. An invalid name, or a
+  config file that can't be read or written, is reported on the page and nothing is changed.
+- **Rebuild now:** starts a check right away and updates the stack even when nothing changed. It keeps data unless the
+  changes since the last good commit match `paths.reset`.
+
+Both are POST requests that only the page itself can make: they need a JSON body, a custom header and a loopback
+`Host`, so another site open in your browser can't trigger them. For this, the poller mounts the config file's folder
+read-write; rerun `start` after upgrading.
+
 | Status | Meaning |
 | --- | --- |
 | `idle` | The stack runs the latest commit |

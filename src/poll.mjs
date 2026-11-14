@@ -219,6 +219,7 @@ async function check() {
   // Missing for a state folder from an older version: treat as unchanged, so upgrading doesn't redeploy.
   const attemptedConfig = existsSync(file('attempted-config')) ? read('attempted-config') : fingerprint;
   const configChanged = attemptedConfig !== fingerprint;
+  const rebuild = existsSync(file('rebuild'));
   if (usesToken() && !token()) {
     publish('blocked', `Waiting for a Git token in ${cfg.git.tokenFile ?? '$' + cfg.git.tokenEnv}. Rerun start after adding it.`);
     return;
@@ -230,7 +231,7 @@ async function check() {
   const deployed = read('deployed');
   const label = describe(sha);
   // Recorded before the attempt, so a commit that fails is not rebuilt every minute.
-  if (sha === read('attempted') && !configChanged) {
+  if (sha === read('attempted') && !configChanged && !rebuild) {
     if (sha === deployed) {
       current = 'Restarting stopped containers';
       await ensureUp();
@@ -242,9 +243,10 @@ async function check() {
   }
   write('attempted', sha);
   write('attempted-config', fingerprint);
+  rmSync(file('rebuild'), { force: true });
   writeFileSync(file('build.log'), '');
   rmSync(file('failed'), { force: true });
-  note(`Updating to ${label}${configChanged ? ' (config file changed)' : ''}`);
+  note(`Updating to ${label}${rebuild ? ' (rebuild requested)' : configChanged ? ' (config file changed)' : ''}`);
   current = 'Checking out the code';
   git(['checkout', '-qf', '--detach', sha]);
   git(['clean', '-qffdx', ...cfg.git.keepOnClean.flatMap((p) => ['-e', p])]);
@@ -254,7 +256,7 @@ async function check() {
     const r = spawnSync('git', ['diff', '--name-only', deployed, sha], { cwd: REPO, encoding: 'utf8' });
     if (r.status === 0) changed = r.stdout.split('\n').filter(Boolean);
   }
-  const decision = plan({ changed, deployed, ...cfg.paths, configChanged });
+  const decision = plan({ changed, deployed, ...cfg.paths, configChanged, rebuild });
   write('plan', JSON.stringify(decision));
   note(`Plan: ${decision.action} (${decision.reason})`);
   if (decision.action === 'reset') await reset(sha);
@@ -287,12 +289,20 @@ async function once() {
 
 async function loop() {
   rmSync(file('lock'), { recursive: true, force: true }); // left over if the container stopped mid-check
-  serveStatus(cfg, DIR);
+  // "Rebuild now" on the status page wakes the loop instead of waiting for the next interval.
+  let wake = () => {};
+  serveStatus(cfg, DIR, { sourceConfig: SOURCE_CONFIG, onRebuild: () => wake() });
   const self = fileURLToPath(import.meta.url);
   for (;;) {
     // A child per check, so state never leaks between checks and a crash doesn't stop the loop.
     await new Promise((resolve) => spawn(process.execPath, [self, 'once'], { stdio: 'inherit' }).on('close', resolve));
-    await sleep(cfg.pollIntervalSeconds * 1000);
+    const timer = new AbortController();
+    await Promise.race([
+      sleep(cfg.pollIntervalSeconds * 1000, undefined, { signal: timer.signal }).catch(() => {}),
+      new Promise((resolve) => (wake = resolve)),
+    ]);
+    timer.abort();
+    wake = () => {};
   }
 }
 

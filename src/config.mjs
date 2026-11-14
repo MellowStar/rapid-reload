@@ -273,3 +273,14 @@ export function parseEnvFile(text) {
   }
   return env;
 }
+
+/**
+ * A copy of the parsed config file with git.branch changed, as written back by the status page. Returns
+ * { raw, errors }; the caller writes `raw` only when errors is empty.
+ */
+export function withBranch(raw, branch) {
+  if (typeof branch !== 'string' || !BRANCH.test(branch.trim())) return { raw, errors: ['git.branch must be a branch name'] };
+  if (!raw || typeof raw.git !== 'object' || raw.git === null) return { raw, errors: validate(raw ?? {}) };
+  const next = { ...raw, git: { ...raw.git, branch: branch.trim() } };
+  return { raw: next, errors: validate(next) };
+}
