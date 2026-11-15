@@ -212,14 +212,42 @@ function reloadConfig() {
   SERVICES = cfg.compose.services;
 }
 
+// Restart, stop and start from the status page. They run here, under the check's lock, so they never overlap an update.
+const CONTROLS = {
+  restart: { label: 'Restarting the services', args: ['restart'], done: 'Restarted' },
+  stop: { label: 'Stopping the services', args: ['stop'], done: 'Stopped' },
+  start: { label: 'Starting the services', args: ['up', '-d', '--no-build', '--no-recreate'], done: 'Started' },
+};
+async function control(action) {
+  const c = CONTROLS[action];
+  if (!c) return;
+  await step(c.label, 'docker', [...dc(), ...c.args, ...(action === 'start' ? waitArgs() : []), ...SERVICES]);
+  // Stopped containers stay down until someone presses Start, Restart or Rebuild; checks don't bring them back.
+  if (action === 'stop') write('stopped', String(now()));
+  else rmSync(file('stopped'), { force: true });
+  note(`${c.done} from the status page`);
+  if (action === 'stop') publish('stopped', 'Stopped from the status page. Press Start to run it again.');
+  else publish('idle', `${c.done}. Running ${read('deployed').slice(0, 7) || 'no commit yet'}`);
+}
+
 async function check() {
   write('last-check', String(now()));
   reloadConfig();
+  const requested = read('control');
+  if (requested) {
+    rmSync(file('control'), { force: true });
+    await control(requested);
+    return;
+  }
   const fingerprint = liveFingerprint(cfg);
   // Missing for a state folder from an older version: treat as unchanged, so upgrading doesn't redeploy.
   const attemptedConfig = existsSync(file('attempted-config')) ? read('attempted-config') : fingerprint;
   const configChanged = attemptedConfig !== fingerprint;
   const rebuild = existsSync(file('rebuild'));
+  if (existsSync(file('stopped')) && !rebuild) {
+    publish('stopped', 'Stopped from the status page. Press Start to run it again, or Rebuild to deploy.');
+    return;
+  }
   if (usesToken() && !token()) {
     publish('blocked', `Waiting for a Git token in ${cfg.git.tokenFile ?? '$' + cfg.git.tokenEnv}. Rerun start after adding it.`);
     return;
@@ -244,6 +272,7 @@ async function check() {
   write('attempted', sha);
   write('attempted-config', fingerprint);
   rmSync(file('rebuild'), { force: true });
+  rmSync(file('stopped'), { force: true });
   writeFileSync(file('build.log'), '');
   rmSync(file('failed'), { force: true });
   note(`Updating to ${label}${rebuild ? ' (rebuild requested)' : configChanged ? ' (config file changed)' : ''}`);
@@ -289,19 +318,22 @@ async function once() {
 
 async function loop() {
   rmSync(file('lock'), { recursive: true, force: true }); // left over if the container stopped mid-check
-  // "Rebuild now" on the status page wakes the loop instead of waiting for the next interval.
+  // Status page actions wake the loop instead of waiting for the next interval, even when they arrive mid-check.
+  let kicked = false;
   let wake = () => {};
-  serveStatus(cfg, DIR, { sourceConfig: SOURCE_CONFIG, onRebuild: () => wake() });
+  serveStatus(cfg, DIR, { sourceConfig: SOURCE_CONFIG, onRebuild: () => ((kicked = true), wake()) });
   const self = fileURLToPath(import.meta.url);
   for (;;) {
     // A child per check, so state never leaks between checks and a crash doesn't stop the loop.
     await new Promise((resolve) => spawn(process.execPath, [self, 'once'], { stdio: 'inherit' }).on('close', resolve));
     const timer = new AbortController();
-    await Promise.race([
-      sleep(cfg.pollIntervalSeconds * 1000, undefined, { signal: timer.signal }).catch(() => {}),
-      new Promise((resolve) => (wake = resolve)),
-    ]);
+    if (!kicked)
+      await Promise.race([
+        sleep(cfg.pollIntervalSeconds * 1000, undefined, { signal: timer.signal }).catch(() => {}),
+        new Promise((resolve) => (wake = resolve)),
+      ]);
     timer.abort();
+    kicked = false;
     wake = () => {};
   }
 }

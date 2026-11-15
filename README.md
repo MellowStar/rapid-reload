@@ -196,7 +196,7 @@ All commands take `--config <file>`.
 The status page shows the current step, the running commit and the branch that brought it in, the last plan, the
 containers, recent activity and the latest build output. It refreshes itself.
 
-It also has two controls:
+It also has these controls:
 
 - **Branch:** a form showing `git.branch` from the config file. Saving writes the new branch straight back to the
   config file (only that field changes) and starts a check, which switches the stack to it. An invalid name, or a
@@ -204,7 +204,12 @@ It also has two controls:
 - **Rebuild now:** starts a check right away and updates the stack even when nothing changed. It keeps data unless the
   changes since the last good commit match `paths.reset`.
 
-Both are POST requests that only the page itself can make: they need a JSON body, a custom header and a loopback
+- **Restart:** restarts the stack's containers with `docker compose restart`, without building or recreating anything.
+- **Stop / Start:** like `docker stop` and `docker start`. Stop stops the services and keeps the containers and data.
+  While stopped, the status shows `stopped` and checks neither update the stack nor bring it back up. Start runs the
+  existing containers again. Rebuild now also ends the stopped state.
+
+All of these are POST requests that only the page itself can make: they need a JSON body, a custom header and a loopback
 `Host`, so another site open in your browser can't trigger them. For this, the poller mounts the config file's folder
 read-write; rerun `start` after upgrading.
 
@@ -212,6 +217,7 @@ read-write; rerun `start` after upgrading.
 | --- | --- |
 | `idle` | The stack runs the latest commit |
 | `working` | An update is running. The old containers serve until they are replaced |
+| `stopped` | The services were stopped from the status page. Start or Rebuild now runs them again |
 | `failed` | The update failed. The page shows the step; the next push or `retry` tries again |
 | `blocked` | The token is missing |
 

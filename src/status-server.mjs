@@ -1,6 +1,6 @@
 // Status page. Reads only the state files named here, so the token is never served. Listens on 8080 inside the
 // container; the container publishes it on 127.0.0.1 only, because build output is unauthenticated.
-// It can change one setting, git.branch in the config file, and ask for a rebuild. Both are POSTs that need a JSON body,
+// It can change one setting, git.branch in the config file, and ask for a rebuild, restart, stop or start. All are POSTs that need a JSON body,
 // a custom header and a loopback Host, so another web page open in the browser can't trigger them.
 import { createServer } from 'node:http';
 import { chmodSync, chownSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
@@ -10,6 +10,7 @@ import { basename, dirname, join } from 'node:path';
 import { withBranch } from './config.mjs';
 
 const tail = (text, n) => text.trimEnd().split('\n').slice(-n).filter(Boolean);
+const CONTROLS = ['restart', 'stop', 'start'];
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 
 /** Rewrites the config file with a new git.branch, keeping its owner and mode. Throws with a readable message. */
@@ -56,7 +57,7 @@ export function serveStatus(cfg, dir, { port = 8080, sourceConfig = '', onRebuil
     });
 
   async function status() {
-    const [raw, events, build, deployed, lastCheck, incoming, planned, stack, branch, rebuild] = await Promise.all([
+    const [raw, events, build, deployed, lastCheck, incoming, planned, stack, branch, rebuild, control, stopped] = await Promise.all([
       read('status.json'),
       read('events.log'),
       read('build.log'),
@@ -67,6 +68,8 @@ export function serveStatus(cfg, dir, { port = 8080, sourceConfig = '', onRebuil
       containers(),
       liveBranch(),
       read('rebuild'),
+      read('control'),
+      read('stopped'),
     ]);
     let s = {};
     let p = {};
@@ -85,6 +88,8 @@ export function serveStatus(cfg, dir, { port = 8080, sourceConfig = '', onRebuil
       branch,
       canEditBranch: Boolean(sourceConfig),
       rebuildQueued: Boolean(rebuild),
+      controlQueued: control.trim(),
+      stopped: Boolean(stopped),
       deployed: sha.slice(0, 7),
       // Saved as "<commit> <branch>"; ignored unless it describes the running commit.
       incoming: sha && incoming.startsWith(sha + ' ') ? incoming.trim().slice(sha.length + 1) : '',
@@ -135,6 +140,13 @@ export function serveStatus(cfg, dir, { port = 8080, sourceConfig = '', onRebuil
         onRebuild();
         return reply(res, 200, { ok: true, branch });
       }
+      const name = req.url.slice('/api/'.length);
+      if (CONTROLS.includes(name)) {
+        writeFileSync(join(dir, 'control'), name);
+        writeFileSync(join(dir, 'events.log'), `${Math.floor(Date.now() / 1000)} ${name[0].toUpperCase() + name.slice(1)} requested from the status page\n`, { flag: 'a' });
+        onRebuild();
+        return reply(res, 200, { ok: true });
+      }
       writeFileSync(join(dir, 'rebuild'), String(Math.floor(Date.now() / 1000)));
       writeFileSync(join(dir, 'events.log'), `${Math.floor(Date.now() / 1000)} Rebuild requested from the status page\n`, { flag: 'a' });
       onRebuild();
@@ -145,7 +157,7 @@ export function serveStatus(cfg, dir, { port = 8080, sourceConfig = '', onRebuil
   }
 
   const server = createServer(async (req, res) => {
-    if (req.method === 'POST' && (req.url === '/api/branch' || req.url === '/api/rebuild')) {
+    if (req.method === 'POST' && (req.url === '/api/branch' || req.url === '/api/rebuild' || CONTROLS.map((c) => `/api/${c}`).includes(req.url))) {
       await action(req, res);
     } else if (req.method !== 'GET') {
       res.statusCode = 405;
@@ -182,9 +194,9 @@ h1{margin:0 0 4px;font-size:clamp(26px,5vw,38px);font-weight:900;letter-spacing:
 .card h2{margin:0 0 12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700;color:#fff;background:var(--muted)}
 .badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.8}
-.idle{background:var(--ok)}.working{background:var(--work)}.failed{background:var(--bad)}.blocked{background:var(--warn)}
+.idle{background:var(--ok)}.working{background:var(--work)}.failed{background:var(--bad)}.blocked{background:var(--warn)}.stopped{background:var(--muted)}
 #step{margin:10px 0 0;font-weight:600}#meta{color:var(--muted);font-size:13px;margin:6px 0 0;overflow-wrap:anywhere}
-form{display:flex;gap:8px;flex-wrap:wrap}
+form,.row{display:flex;gap:8px;flex-wrap:wrap}
 input{flex:1 1 180px;min-width:0;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit}
 input:focus{outline:2px solid var(--accent);outline-offset:1px}
 button{padding:9px 16px;border-radius:10px;border:0;font:inherit;font-weight:700;cursor:pointer;color:#fff;background:var(--text)}
@@ -203,6 +215,8 @@ pre{margin:0;overflow-x:auto;background:var(--code);border:1px solid var(--line)
 <div class="grid">
 <section class="card"><h2>Branch</h2><form id="branchForm"><input id="branch" name="branch" autocomplete="off" spellcheck="false" aria-label="Git branch" required>
 <button id="save" type="submit">Save</button></form><p class="hint">Saved to git.branch in the config file. The stack switches on the next check, which starts now.</p><p id="branchMsg" class="msg" role="status"></p></section>
+<section class="card"><h2>Services</h2><div class="row"><button id="restart" type="button">Restart</button><button id="stop" type="button">Stop</button><button id="start" type="button">Start</button></div>
+<p class="hint">Restart restarts the containers without building. Stop and Start work like docker stop and docker start: nothing is rebuilt or deleted, and checks leave a stopped stack alone.</p><p id="controlMsg" class="msg" role="status"></p></section>
 <section class="card"><h2>Rebuild</h2><button id="rebuild" class="primary" type="button">Rebuild now</button>
 <p class="hint">Builds and restarts the services at the branch's latest commit, even if nothing changed. Data is kept unless paths.reset matches.</p><p id="rebuildMsg" class="msg" role="status"></p></section>
 </div>
@@ -234,15 +248,22 @@ $('rebuild').addEventListener('click',async()=>{$('rebuild').disabled=true;say($
   try{await post('/api/rebuild',{});say($('rebuildMsg'),'Rebuild requested. Progress shows above.',true);tick()}
   catch(err){say($('rebuildMsg'),'Failed to request a rebuild: '+err.message,false)}
   finally{$('rebuild').disabled=false}});
+const verbs={restart:['Restart','Restarting'],stop:['Stop','Stopping'],start:['Start','Starting']};
+let stopped=false,busy=false;
+const sync=()=>{$('restart').disabled=busy;$('stop').disabled=busy||stopped;$('start').disabled=busy||!stopped};
+for(const a of Object.keys(verbs))$(a).addEventListener('click',async()=>{busy=true;sync();say($('controlMsg'),'Requesting…',true);
+  try{await post('/api/'+a,{});say($('controlMsg'),verbs[a][0]+' requested. Progress shows above.',true);tick()}
+  catch(err){say($('controlMsg'),'Failed to '+a+': '+err.message,false)}
+  finally{busy=false;sync()}});
 async function tick(){try{const s=await(await fetch('/status.json')).json();
   document.title='Reload: '+s.name;$('title').textContent='Reload: '+s.name;
   $('badge').textContent=s.state;$('badge').className='badge '+s.state;$('step').textContent=s.step;
   if(!editing&&document.activeElement!==$('branch'))$('branch').value=s.branch;
-  $('branch').disabled=$('save').disabled=!s.canEditBranch;
+  $('branch').disabled=$('save').disabled=!s.canEditBranch;stopped=s.stopped;sync();
   const mins=s.since?Math.floor((Date.now()/1000-s.since)/60):0;
   $('meta').textContent='Following: '+s.branch+' · Running: '+(s.deployed?s.deployed+(s.incoming?' (from '+s.incoming+')':''):'none')
     +(s.plan?' · Last plan: '+s.plan:'')+' · Last check: '+time(s.lastCheck)+(s.state==='working'?' · This step: '+mins+' min':'')
-    +(s.rebuildQueued?' · Rebuild queued':'');
+    +(s.rebuildQueued?' · Rebuild queued':'')+(s.controlQueued?' · '+s.controlQueued+' queued':'');
   $('linksCard').hidden=!s.links.length;
   $('links').replaceChildren(...s.links.map((l)=>{const a=document.createElement('a');a.href=l.url;a.textContent=l.label;return a}));
   rows($('containers'),s.containers);rows($('events'),s.events.map(([t,m])=>[time(t),m]));

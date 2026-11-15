@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- Status page: Restart (no build), Stop and Start buttons. A stopped stack stays down until Start or Rebuild now. A
+  button pressed while a check is running now takes effect right after it instead of at the next interval.
+
 ## 0.3.0
 
 - Status page: a form to change `git.branch` (written to the config file) and a "Rebuild now" button, with failures
